@@ -1,0 +1,93 @@
+# Levantar:   docker compose up -d --build            (2 nodos por defecto)
+# Escalar:    docker compose up -d --scale worker=4
+# Cliente:    docker compose run --rm cliente estado
+# Datos:      docker compose --profile datos run --rm preparar      (nuScenes, una sola vez)
+# Nodos en otras computadoras: docker-compose.nodo.yml
+name: entrenamiento
+
+x-imagen-base: &base
+  BASE: ${IMAGEN_BASE:-python:3.11.9-slim}
+
+services:
+  coordinador:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.coordinador
+      args: *base
+    image: entrenamiento-coordinador:1.0
+    hostname: coordinador
+    networks: [red-entrenamiento]
+    ports: ["50051:50051"]    # solo hace falta para nodos de otras computadoras o el cliente fuera de Docker
+    environment:
+      VERSION_DATOS: ${VERSION_DATOS:-sinteticos-v1}
+      HEARTBEAT_SEG: "3"
+      FALTAS_MAX: "3"          # 3 heartbeats perdidos (~9 s) => nodo caído
+      MAX_INTENTOS: "4"
+      TIMEOUT_LINEAL: ${TIMEOUT_LINEAL:-120}
+      TIMEOUT_MLP: ${TIMEOUT_MLP:-900}
+      TIMEOUT_CNN: ${TIMEOUT_CNN:-1800}
+      ORDEN_COLA: pesados_primero
+    volumes:
+      - estado:/estado          # persistencia de la cola: sobrevive a reinicios del coordinador
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits: {cpus: "1", memory: 1g}
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nodo
+      args:
+        BASE: ${IMAGEN_BASE:-python:3.11.9-slim}
+        TORCH_INDEX: ${TORCH_INDEX:-https://download.pytorch.org/whl/cpu}
+    image: entrenamiento-nodo:1.0
+    networks: [red-entrenamiento]
+    depends_on:
+      coordinador: {condition: service_healthy}
+    environment:
+      COORDINADOR: coordinador:50051
+      HEARTBEAT_SEG: "3"
+      SLOTS: lineal=1,mlp=1,cnn=1   # bulkhead por modelo
+      MAX_TRABAJOS: "1"             # trabajos simultáneos por nodo
+      HILOS_TORCH: "2"              # igual a cpus: mismo valor en todos los nodos => mismas métricas
+      RETARDO_POR_EPOCA: ${RETARDO_POR_EPOCA:-0}
+    volumes:
+      - ${DATOS:-./datos/generados}:/datos:ro   # copia local de los datos preparados
+    deploy:
+      replicas: ${NODOS:-2}
+      resources:
+        limits: {cpus: "2", memory: 3g}       # que una CNN no tumbe al nodo
+
+  cliente:
+    image: entrenamiento-coordinador:1.0
+    profiles: [cli]
+    networks: [red-entrenamiento]
+    depends_on: [coordinador]
+    environment:
+      COORDINADOR: coordinador:50051
+    volumes:
+      - ./experimentos:/app/experimentos
+    entrypoint: ["python", "-m", "sistema.cliente"]
+
+  preparar:     # preparación de nuScenes, una sola vez antes de medir
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.datos
+      args: *base
+    image: entrenamiento-datos:1.0
+    profiles: [datos]
+    network_mode: none
+    volumes:
+      - ${NUSCENES:-./nuscenes}:/nuscenes:ro   # carpeta con v1.0-mini/, samples/, sweeps/, maps/
+      - ./datos:/salida
+    command: ["--dataroot", "/nuscenes", "--version", "v1.0-mini", "--salida", "/salida/nuscenes_mini"]
+
+# Una red con nombre, como en el repo del curso: los contenedores se encuentran por su nombre
+# (coordinador:50051). La red bridge por defecto no resuelve nombres.
+networks:
+  red-entrenamiento:
+    name: red-entrenamiento
+
+volumes:
+  estado:   # borrar con: docker compose down -v

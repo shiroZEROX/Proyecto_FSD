@@ -53,3 +53,9 @@ El proceso ejecuta 8 configuraciones Ridge/Lasso, 18 MLP y 8 CNN de forma secuen
 - scripts/ejecutar_referencia.py: grilla fija y cronómetro de referencia.
 
 La implementación de coordinador, nodos, gRPC y Docker corresponde al resto del equipo, según el alcance indicado para esta parte.
+
+## Sistema distribuido
+
+El coordinador, los nodos worker, gRPC, Docker, los patrones de tolerancia a fallos, el menú y la
+preparación de nuScenes en el formato del sistema están en [`sistema_distribuido/`](sistema_distribuido/README.md).
+Arranque rápido: `cd sistema_distribuido && python menu.py`.

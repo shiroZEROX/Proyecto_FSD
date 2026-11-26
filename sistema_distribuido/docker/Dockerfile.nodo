@@ -1,0 +1,23 @@
+# Imagen de nodo preparada para los tres modelos. Solo CPU. Versiones fijas.
+ARG BASE=python:3.11.9-slim
+FROM ${BASE}
+# Índice de PyTorch para CPU (rueda sin CUDA, ~200 MB). Se puede cambiar con --build-arg.
+ARG TORCH_INDEX=https://download.pytorch.org/whl/cpu
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 \
+    OMP_NUM_THREADS=2 HILOS_TORCH=2 CUDA_VISIBLE_DEVICES=""
+WORKDIR /app
+RUN pip install --no-cache-dir torch==2.3.1 --index-url ${TORCH_INDEX}
+COPY requirements-nodo.txt .
+RUN pip install --no-cache-dir -r requirements-nodo.txt
+COPY sistema/ sistema/
+# Como en el repo del curso: el código de gRPC se genera del .proto al construir (no se copia el local).
+COPY proto/ proto/
+RUN pip install --no-cache-dir grpcio-tools==1.64.1 && \
+    python -m grpc_tools.protoc -I proto --python_out=. --grpc_python_out=. proto/sistema/entrenamiento.proto && \
+    pip uninstall -y grpcio-tools
+COPY pipelines/ pipelines/
+ENV DIR_DATOS=/datos DIR_TRABAJO=/trabajo
+# Listo = tiene datos y bibliotecas y el último heartbeat al coordinador fue hace < 15 s.
+HEALTHCHECK --interval=5s --timeout=3s --start-period=20s --retries=3 \
+  CMD python -c "import os,sys,time; sys.exit(0 if time.time()-os.path.getmtime('/tmp/nodo_listo')<15 else 1)"
+CMD ["python", "-m", "sistema.worker"]
