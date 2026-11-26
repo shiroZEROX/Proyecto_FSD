@@ -1,0 +1,17 @@
+ARG BASE=python:3.11.9-slim
+FROM ${BASE}
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+WORKDIR /app
+COPY requirements-coordinador.txt .
+RUN pip install --no-cache-dir -r requirements-coordinador.txt
+COPY sistema/ sistema/
+# Como en el repo del curso: el código de gRPC se genera del .proto al construir (no se copia el local).
+COPY proto/ proto/
+RUN pip install --no-cache-dir grpcio-tools==1.64.1 && \
+    python -m grpc_tools.protoc -I proto --python_out=. --grpc_python_out=. proto/sistema/entrenamiento.proto && \
+    pip uninstall -y grpcio-tools
+COPY experimentos/referencia.json experimentos/referencia.json
+ENV DIR_ESTADO=/estado PUERTO=50051
+EXPOSE 50051
+HEALTHCHECK --interval=5s --timeout=3s --start-period=5s --retries=3 CMD python -m sistema.salud
+CMD ["python", "-m", "sistema.coordinador"]

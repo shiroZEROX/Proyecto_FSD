@@ -1,0 +1,12 @@
+# Imagen solo para preparar nuScenes una vez (datos/preparar_nuscenes.py). Los nodos no la usan.
+ARG BASE=python:3.11.9-slim
+FROM ${BASE}
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+WORKDIR /app
+# nuscenes-devkit sin dependencias: las suyas (matplotlib<3.6) no instalan en Python 3.11.
+COPY requirements-datos.txt .
+RUN pip install --no-cache-dir --no-deps nuscenes-devkit==1.1.11 && \
+    pip install --no-cache-dir -r requirements-datos.txt
+COPY datos/preparar_nuscenes.py datos/generar_sinteticos.py datos/
+COPY scripts/nuscenes_falso.py scripts/
+ENTRYPOINT ["python", "datos/preparar_nuscenes.py"]

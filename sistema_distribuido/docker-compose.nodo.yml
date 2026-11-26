@@ -1,0 +1,35 @@
+# Nodos worker en OTRA computadora de la misma red local que el coordinador.
+#
+# En la computadora del coordinador:   docker compose up -d --wait coordinador
+#   (publica el puerto 50051; abrirlo en el firewall si hace falta)
+# En cada computadora extra:
+#   1. copiar la misma carpeta de datos preparados (misma version.txt) a ./datos/nuscenes_mini
+#   2. COORDINADOR=192.168.x.y:50051 DATOS=./datos/nuscenes_mini NODOS=2 \
+#        docker compose -f docker-compose.nodo.yml up -d --build
+#
+# Es el mismo servicio worker de docker-compose.yml; solo cambia a dónde apunta COORDINADOR.
+name: entrenamiento-nodos
+
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.nodo
+      args:
+        BASE: ${IMAGEN_BASE:-python:3.11.9-slim}
+        TORCH_INDEX: ${TORCH_INDEX:-https://download.pytorch.org/whl/cpu}
+    image: entrenamiento-nodo:1.0
+    environment:
+      COORDINADOR: ${COORDINADOR:?falta COORDINADOR=ip-del-coordinador:50051}
+      HEARTBEAT_SEG: "3"
+      SLOTS: lineal=1,mlp=1,cnn=1
+      MAX_TRABAJOS: "1"
+      HILOS_TORCH: "2"            # igual que en docker-compose.yml: si cambia, cambian los últimos decimales
+      RETARDO_POR_EPOCA: ${RETARDO_POR_EPOCA:-0}
+    volumes:
+      - ${DATOS:-./datos/nuscenes_mini}:/datos:ro
+    restart: unless-stopped
+    deploy:
+      replicas: ${NODOS:-1}
+      resources:
+        limits: {cpus: "2", memory: 3g}

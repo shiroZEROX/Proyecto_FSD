@@ -1,0 +1,19 @@
+# Solo para preparar nuScenes (datos/preparar_nuscenes.py). NO va en la imagen del nodo.
+# nuscenes-devkit 1.1.11 exige matplotlib<3.6, que no tiene rueda para Python 3.11 y no compila.
+# Por eso el devkit se instala aparte, sin dependencias, y aquí van sus dependencias con versiones que sí instalan:
+#   pip install --no-deps nuscenes-devkit==1.1.11
+#   pip install -r requirements-datos.txt
+# Probado en Python 3.11 (importa NuScenes y corre la preparación contra scripts/nuscenes_falso.py).
+numpy==1.26.4
+pillow==10.4.0
+pyquaternion==0.9.9
+matplotlib==3.8.4
+shapely==2.0.4
+opencv-python-headless==4.10.0.84
+scipy==1.13.1
+scikit-learn==1.5.0
+cachetools==5.3.3
+descartes==1.1.0
+fire==0.6.0
+pycocotools==2.0.8
+tqdm==4.66.4

@@ -1,0 +1,3 @@
+# Para correr todo local sin Docker y para regenerar el proto
+-r requirements-nodo.txt
+grpcio-tools==1.64.1

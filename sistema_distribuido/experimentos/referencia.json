@@ -1,0 +1,80 @@
+{
+  "descripcion": "Conjunto de referencia del enunciado: 8 lineal + 18 MLP + 8 CNN = 34 trabajos. Ajustar 'epocas' de la CNN para que cada trabajo dure >= 1 minuto con los datos reales. Se envían primero las CNN para que los nodos empiecen por lo más pesado.",
+  "semilla": 42,
+  "version_datos": "",
+  "peticiones": [
+    {
+      "modelo": "cnn",
+      "config": {
+        "capas": 3,
+        "epocas": 15,
+        "batch": 64
+      },
+      "grid": {
+        "filtros": [
+          16,
+          32
+        ],
+        "lr": [
+          0.001,
+          0.0003
+        ],
+        "tam_imagen": [
+          32,
+          64
+        ]
+      }
+    },
+    {
+      "modelo": "mlp",
+      "config": {
+        "objetivo": "num_lidar",
+        "batch": 64
+      },
+      "grid": {
+        "capas": [
+          [
+            32
+          ],
+          [
+            64,
+            32
+          ],
+          [
+            128,
+            64,
+            32
+          ]
+        ],
+        "lr": [
+          0.0001,
+          0.001,
+          0.01
+        ],
+        "epocas": [
+          20,
+          40
+        ]
+      }
+    },
+    {
+      "modelo": "lineal",
+      "config": {
+        "objetivo": "num_lidar",
+        "normalizar": true
+      },
+      "grid": {
+        "tipo": [
+          "ridge",
+          "lasso"
+        ],
+        "alpha": [
+          0.01,
+          0.1,
+          1,
+          10
+        ]
+      }
+    }
+  ]
+}

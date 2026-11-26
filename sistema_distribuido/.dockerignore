@@ -1,0 +1,8 @@
+datos/generados/
+datos/nuscenes_mini/
+estado/
+trabajo_nodo/
+**/__pycache__
+sistema/*_pb2*.py
+*.csv
+.git

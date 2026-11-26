@@ -1,0 +1,12 @@
+# Igual que el repo del curso: el código de gRPC se genera del .proto, no se versiona.
+# Local: bash scripts/generar_proto.sh   ·   Docker: se genera al construir la imagen.
+*pb2.py
+*pb2*grpc.py
+.vscode/
+__pycache__/
+datos/generados/
+datos/nuscenes_mini/
+estado/
+trabajo_nodo/
+experimentos/*.log
+.env

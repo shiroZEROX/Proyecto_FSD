@@ -1,0 +1,177 @@
+syntax = "proto3";
+
+package entrenamiento;
+
+// Servicio único del coordinador. Lo usan dos tipos de clientes:
+//  - usuarios (cliente.py): Enviar, Estado, Resultado, Nodos
+//  - nodos worker (worker.py): Heartbeat, PedirTrabajo, ReportarAvance, ReportarResultado
+// Las configuraciones viajan como JSON para no tener que cambiar el proto
+// cada vez que un modelo agrega un hiperparámetro.
+service Coordinador {
+  // ---- API de usuario ----
+  rpc Enviar (PeticionEnvio) returns (RespuestaEnvio);
+  rpc Estado (PeticionEstado) returns (RespuestaEstado);
+  rpc Resultado (PeticionResultado) returns (RespuestaResultado);
+  rpc Nodos (Vacio) returns (RespuestaNodos);
+  rpc Ping (Vacio) returns (Pong);
+
+  // ---- API de nodos ----
+  rpc Heartbeat (Latido) returns (RespuestaLatido);
+  // Consumidores competidores: el nodo pide trabajo cuando tiene capacidad libre.
+  rpc PedirTrabajo (PeticionTrabajo) returns (Asignacion);
+  rpc ReportarAvance (Avance) returns (RespuestaAvance);
+  rpc ReportarResultado (ResultadoTrabajo) returns (AcuseResultado);
+}
+
+message Vacio {}
+
+message Pong {
+  string estado = 1;
+  double iniciado_en = 2;
+}
+
+// --------- usuario ---------
+
+message PeticionEnvio {
+  string modelo = 1;          // "lineal" | "mlp" | "cnn"; cualquier otro -> INVALID_ARGUMENT
+  string config_json = 2;     // hiperparámetros base, p. ej. {"alpha": 1.0}
+  string grid_json = 3;       // opcional: {"alpha": [0.01, 0.1], "tipo": ["ridge", "lasso"]}
+  int32 semilla = 4;          // 0 => semilla por defecto (42)
+  string version_datos = 5;   // vacío => la versión por defecto del coordinador
+}
+
+message TrabajoEnviado {
+  string job_id = 1;
+  bool nuevo = 2;             // false => ya existía (envío repetido): no se vuelve a ejecutar
+  string estado = 3;
+}
+
+message RespuestaEnvio {
+  string peticion_id = 1;
+  repeated TrabajoEnviado trabajos = 2;
+}
+
+message PeticionEstado {
+  string peticion_id = 1;     // uno de los dos
+  string job_id = 2;
+}
+
+message InfoTrabajo {
+  string job_id = 1;
+  string modelo = 2;
+  string config_json = 3;
+  int32 semilla = 4;
+  string estado = 5;          // PENDIENTE | CORRIENDO | TERMINADO | FALLIDO
+  string worker = 6;
+  int32 intentos = 7;
+  int32 reasignaciones = 8;
+  string metricas_json = 9;
+  string error = 10;
+  int32 epoca = 11;
+  double perdida = 12;
+  double duracion = 13;       // segundos del entrenamiento que se aceptó
+}
+
+message RespuestaEstado {
+  repeated InfoTrabajo trabajos = 1;
+  string mejor_job_id = 2;    // solo para peticiones de grid search ya terminadas
+  string criterio = 3;
+  int32 pendientes = 4;
+  int32 corriendo = 5;
+  int32 terminados = 6;
+  int32 fallidos = 7;
+}
+
+message PeticionResultado {
+  string job_id = 1;
+}
+
+message RespuestaResultado {
+  string job_id = 1;
+  string estado = 2;
+  string metricas_json = 3;
+  bytes modelo = 4;
+  string formato_modelo = 5;  // "pickle" (sklearn) | "torch"
+}
+
+message InfoNodo {
+  string worker_id = 1;
+  bool vivo = 2;
+  bool listo = 3;
+  repeated string trabajos = 4;
+  double ultimo_latido = 5;
+  string version_datos = 6;
+  int32 terminados = 7;
+}
+
+message RespuestaNodos {
+  repeated InfoNodo nodos = 1;
+}
+
+// --------- nodos ---------
+
+message TrabajoActivo {
+  string job_id = 1;
+  int32 asignacion = 2;
+}
+
+message Latido {
+  string worker_id = 1;
+  bool listo = 2;
+  string version_datos = 3;
+  repeated TrabajoActivo activos = 4;
+}
+
+message RespuestaLatido {
+  repeated string cancelar = 1;   // trabajos que el nodo debe abandonar (reasignados o ya terminados)
+  int32 intervalo_seg = 2;
+}
+
+message PeticionTrabajo {
+  string worker_id = 1;
+  repeated string modelos = 2;    // modelos para los que el nodo tiene un slot libre (bulkhead)
+  string version_datos = 3;
+}
+
+message Asignacion {
+  bool hay_trabajo = 1;
+  string job_id = 2;
+  string modelo = 3;
+  string config_json = 4;
+  int32 semilla = 5;
+  string version_datos = 6;
+  int32 asignacion = 7;           // token de asignación: sube cada vez que el trabajo se reasigna
+  double plazo_seg = 8;           // timeout del trabajo según el modelo
+  bytes checkpoint = 9;           // checkpoint previo si el trabajo ya había avanzado en otro nodo
+}
+
+message Avance {
+  string worker_id = 1;
+  string job_id = 2;
+  int32 asignacion = 3;
+  int32 epoca = 4;
+  double perdida = 5;
+  bytes checkpoint = 6;
+}
+
+message RespuestaAvance {
+  bool cancelar = 1;
+}
+
+message ResultadoTrabajo {
+  string worker_id = 1;
+  string job_id = 2;
+  int32 asignacion = 3;
+  bool ok = 4;
+  string metricas_json = 5;
+  bytes modelo = 6;
+  string formato_modelo = 7;
+  string error = 8;
+  bool reintentable = 9;
+  double duracion = 10;
+}
+
+message AcuseResultado {
+  bool aceptado = 1;
+  string motivo = 2;              // "aceptado" | "duplicado" | "asignacion_vieja" | ...
+}
